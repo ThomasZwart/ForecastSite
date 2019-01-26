@@ -137,26 +137,21 @@
                     rows = results.data.length;
 
                 console.log("Result: ", results);   
-                console.log("Data: ", results.data)
                 console.log("Rows:", rows, "Stepped:", stepped, "Chunks:", chunks);
 
                 $.ajax({
-                    data: results.data,
+                    data: JSON.stringify(results),
                     type: 'POST',
                     url: 'http://127.0.0.1:5000/process',
-                    success: function () {
-                        alert("ging goed");
+                    contentType: "application/json; charset=utf-8",
+                    success: function (data) {
+                        console.log(data);
                     },
                     error: function () {
                         alert("ging fout");
                     }
-                }).done(function (data) {
-                    alert(data.error);
                 });
             }
-
-
-
 
 
 

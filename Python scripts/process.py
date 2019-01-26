@@ -8,7 +8,14 @@ def index():
 
 @app.route('/process', methods=['POST'])
 def process():
-	return jsonify({'error' : 'Missing data!'})
+	data = request.get_json()['data']
+	y = 0
+	for i in range(1, len(data) - 1):
+		y = y + int(data[i][0]) 
+		print(data[i][0])
+	
+
+	return jsonify({'error' : y})
 
 if __name__ == '__main__':
 	app.run(debug=True)
