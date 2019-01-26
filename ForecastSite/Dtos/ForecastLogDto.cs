@@ -7,5 +7,6 @@ namespace ForecastSite.Dtos
 {
     public class ForecastLogDto
     {
+        public string Test { get; set; }
     }
 }

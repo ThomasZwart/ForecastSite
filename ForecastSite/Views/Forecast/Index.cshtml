@@ -16,24 +16,8 @@
                 </label>
                 <div id="byte_content"></div>
 
-                <div class="container">
-                    <br><br><br><br>
-                    <form id="form" class="form-inline">
-                        <div class="form-group">
-                            <label class="sr-only" for="emailInput">Email address</label>
-                            <input type="email" class="form-control" id="emailInput" placeholder="Email">
-                        </div>
-                        <div class="form-group">
-                            <label class="sr-only" for="nameInput">Name</label>
-                            <input type="text" class="form-control" id="nameInput" placeholder="First Name">
-                        </div>
-                        <button type="submit" class="btn btn-default">Submit</button>
-                    </form>
-                    <br>
-                    <div id="successAlert" class="alert alert-success" role="alert" style="display:none;"></div>
-                    <div id="errorAlert" class="alert alert-danger" role="alert" style="display:none;"></div>
-                </div>
             </div>
+
         </div>
     </div>
 </div>
@@ -43,17 +27,18 @@
 {
     <script>
         $(document).ready(function () {
-            var files = null;
+            var $files = $('#files');
             
-            $("#files").on("input",
+            // Get an array of files from the select file input button
+            $files.on("input",
                 function () {         
-                    files = $("#files")[0].files;
+                    fileList = $files[0].files;
+                    // Set the html text of the box to the name of the files
                     var string = "";
-                    for (var i = 0; i < files.length; i++) {
-                        string = string + files[i].name + ", ";
+                    for (var i = 0; i < fileList.length; i++) {
+                        string = string + fileList[i].name + ", ";
                     }
-                    $("#fileLabel").html(string);
-                    
+                    $("#fileLabel").html(string);                    
                 });
 
             var stepped = 0, chunks = 0, rows = 0;
@@ -66,7 +51,6 @@
                 chunks = 0;
                 rows = 0;
 
-                var files = $('#files')[0].files;
                 var config = buildConfig();
 
                 // NOTE: Chunk size does not get reset if changed and then set back to empty/default value
@@ -78,7 +62,7 @@
                     */
 
 
-                if (files.length > 0) {
+                if (fileList.length > 0) {
                     /*
                      * TODO chunking files longer than 10 MB
                     if (!$('#stream').prop('checked') && !$('#chunk').prop('checked')) {
@@ -91,19 +75,28 @@
                     }
                     */
 
+                    var logFile = {
+                        test : "aapnootmies"
+                    }
+
+                    // Start timer
                     start = performance.now();
                     
 
-                    $('#files').parse({
+                    $files.parse({
                         config: config,
                         before: function (file, inputElem) {
                             console.log("Parsing file:", file);
                         },
                         complete: function () {
+                            end = performance.now();
+                            console.log("Time spend: ", end - start)
                             console.log("Done with all files.");
-                            // TODO Ajax to c# to log
+                            // Logging the request in forecast API
                             $.ajax({
-
+                                url: "/api/log",
+                                method: "POST",
+                                data: logFile
                             });
                         }
                     });
@@ -111,30 +104,84 @@
             });
 
 
-
-
             function buildConfig() {               
                 return {
-                    delimiter: false,
+                    download: false,
+                    delimiter: "",
                     newline: "",
                     header: false,
                     dynamicTyping: false,
                     preview: 0,
                     step: false,
-                    //encoding: $('#encoding').val(),
+                    encoding: "",
                     worker: false,
-                    //comments: $('#comments').val(),
+                    comments: false,
                     complete: completeFn,
                     error: errorFn,
                     download: false,
                     fastMode: false,
                     skipEmptyLines: false,
-                    chunk: false,
+                    chunk: undefined,
                     beforeFirstChunk: undefined,
                 };
 
             }
 
+            function errorFn(error, file) {
+                console.log("ERROR:", error, file);
+            }
+
+            function completeFn(results) {
+                
+                if (results.data && results.data.length > 0)
+                    rows = results.data.length;
+
+                console.log("Result: ", results);   
+                console.log("Data: ", results.data)
+                console.log("Rows:", rows, "Stepped:", stepped, "Chunks:", chunks);
+
+                $.ajax({
+                    data: results.data,
+                    type: 'POST',
+                    url: 'http://127.0.0.1:5000/process',
+                    success: function () {
+                        alert("ging goed");
+                    },
+                    error: function () {
+                        alert("ging fout");
+                    }
+                }).done(function (data) {
+                    alert(data.error);
+                });
+            }
+
+
+
+
+
+
+
+
+            function chunkFn(results, streamer, file) {               
+                if (!results)
+                    return;
+                chunks++;
+                rows += results.data.length;
+
+                parser = streamer;
+
+
+                if (printStepChecked)
+                    console.log("Chunk data:", results.data.length, results);
+
+                if (pauseChecked) {
+                    console.log("Pausing; " + results.data.length + " rows in chunk; file:", file);
+                    streamer.pause();
+                    return;
+                }
+            }
+
+            
             function stepFn(results, parserHandle) {
                 stepped++;
                 rows += results.data.length;
@@ -151,41 +198,7 @@
                     console.log(results, results.data[0]);
             }
 
-            function chunkFn(results, streamer, file) {
-                if (!results)
-                    return;
-                chunks++;
-                rows += results.data.length;
-
-                parser = streamer;
-
-                if (printStepChecked)
-                    console.log("Chunk data:", results.data.length, results);
-
-                if (pauseChecked) {
-                    console.log("Pausing; " + results.data.length + " rows in chunk; file:", file);
-                    streamer.pause();
-                    return;
-                }
-            }
-
-            function errorFn(error, file) {
-                console.log("ERROR:", error, file);
-            }
-
-            function completeFn() {
-                end = performance.now();
-                if (!$('#stream').prop('checked')
-                    && !$('#chunk').prop('checked')
-                    && arguments[0]
-                    && arguments[0].data)
-                    rows = arguments[0].data.length;
-
-                console.log("Finished input (async). Time:", end - start, arguments);
-                console.log("Rows:", rows, "Stepped:", stepped, "Chunks:", chunks);
-            }
-
-            $('#form').submit(function () {
+           /* $('#form').submit(function () {
                 $.ajax({
                     data: {
                         name: $('#nameInput').val(),
@@ -209,6 +222,8 @@
                 event.preventDefault();
                 return false;
             });
+            */
+            
           
 
           /* $("#read-file").on("click",
