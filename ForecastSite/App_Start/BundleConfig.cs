@@ -17,11 +17,12 @@ namespace ForecastSite
             bundles.Add(new ScriptBundle("~/bundles/modernizr").Include(
                         "~/Scripts/modernizr-*"));
 
+            // TODO: FileInputToPython, aparte bundel?
             bundles.Add(new Bundle("~/bundles/lib").Include(
                       "~/Scripts/jquery-{version}.js",
-                      "~/Scripts/bootstrap.js",
-                      "~/Scripts/LineReader.js",
-                      "~/Scripts/papaparse.js"));
+                      "~/Scripts/bootstrap.js", 
+                      "~/Scripts/LineReader.js"
+                      ));
 
             bundles.Add(new StyleBundle("~/Content/css").Include(
                       "~/Content/bootstrap.css",

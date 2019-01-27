@@ -82,3 +82,18 @@ var LineReader = function (file, chunkSize) {
         internals.reader.readAsText(blob);
     };
 };
+
+/*
+ // Parameters are file and chunksize
+var lineReader = new LineReader(file, 1024);
+
+// Event gets an array of full lines from the data
+lineReader.on("lines",
+    function (lines) {
+        console.log(lines.length);
+        for (var line = 0; line < lines.length; line++) {
+            console.log(lines[line]);
+        };
+    });
+lineReader.read();
+*/
