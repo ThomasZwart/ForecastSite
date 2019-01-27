@@ -1,23 +1,31 @@
 ﻿$(document).ready(function () {
     var $files = $('#files');
-    var fileList;
+    var fileAmount = 0;
+    var totalFileSize = 0;
     var chunks = 0, rows = 0;
     var start, end;
-    var chunking = false;
     var result = [];
     var filesHandled = 0;
     var error = false;
+    var chunking = false;
 
     // Get an array of files from the select file input button
     $files.on("input",
         function () {
-            fileList = $files[0].files;
-            // Set the html text of the box to the name of the files
+            var fileList = $files[0].files;
+            fileAmount = fileList.length;
+            totalFileSize = 0;
+           
+            // Determine the total size of all files
             var string = "";
             for (var i = 0; i < fileList.length; i++) {
                 string = string + fileList[i].name + ", ";
+                totalFileSize += fileList[i].size;
             }
-            $("#fileLabel").html(string);
+            // Set the html text of the box to the name of the files
+            if (fileList.length == 0) $("#fileLabel").html("Select File")
+            else $("#fileLabel").html(string);
+            
         });
 
     $('#read-file').click(function () {
@@ -25,68 +33,64 @@
         filesHandled = 0;
         result = [];
         chunks = 0;
-        rows = 0;
-        chunking = false;
-        if (fileList.length > 0) {
 
-            // Determine the total size of all files
-            var totalFileSize = 0;
-            for (var i = 0; i < fileList.length; i++) {
-                totalFileSize += fileList[i].size;
-            }
+        // Return if there are no files selected
+        if (fileAmount == 0) {
+            return
+        } 
 
-            if (totalFileSize >= 1000000 && totalFileSize < 100000000) {
-                Papa.LocalChunkSize = totalFileSize / 10 + 1;
-                chunking = false;
-            }
-            // TODO: in chunks naar python
-            else if (totalFileSize >= 100000000 && totalFileSize < 1000000000) {
-                Papa.LocalChunkSize = totalFileSize / 1000 + 1;
-                chunking = true;
-                alert("Te grote file");
-                return;
-            }
-            else if (totalFileSize >= 1000000000 && totalFileSize < 10000000000) {
-                Papa.LocalChunkSize = totalFileSize / 10000 + 1;
-                chunking = true;
-                alert("Te grote file");
-                return;
-            }
-            else if (totalFileSize >= 10000000000) {
-                alert("Te grote file");
-                return;
-            }
 
-            var logFile = {
-                test: "aapnootmies"
+        /*var logFile = {
+            test: "aapnootmies"
+        }*/
+
+        // Build the config for the parser
+        // chunking and worker needs to be set before the config is build.
+        var config = buildConfig();
+
+        // Start timer
+        start = performance.now();
+        $files.parse({
+            config: config,
+            before: function (file, inputElem) {
+                console.log("Parsing file:", file);
+            },
+            complete: function () {
+                end = performance.now();
+                console.log("Time spend parsing: ", end - start)
+                // Logging the request in forecast API
+                /*$.ajax({
+                    url: "/api/log",
+                    method: "POST",
+                    data: logFile
+                });
+                */
             }
-
-            var config = buildConfig();
-
-            // Start timer
-            start = performance.now();
-            $files.parse({
-                config: config,
-                before: function (file, inputElem) {
-                    console.log("Parsing file:", file);
-                },
-                complete: function () {
-                    end = performance.now();
-                    console.log("Time spend parsing: ", end - start)
-                    // Logging the request in forecast API
-                    /*$.ajax({
-                        url: "/api/log",
-                        method: "POST",
-                        data: logFile
-                    });
-                    */
-                }
-            });
-
-        };
+        });
     });
 
-
+    // Build the parsing config file
+    function buildConfig() {
+        return {
+            download: false,
+            delimiter: "",
+            newline: "",
+            header: false,
+            dynamicTyping: false,
+            preview: 0,
+            step: undefined,
+            encoding: "",
+            worker: false,
+            comments: false,
+            complete: completeFn,
+            error: errorFn,
+            download: false,
+            fastMode: false,
+            skipEmptyLines: true,
+            chunk: setChunking() ? chunkFn : undefined,
+            beforeFirstChunk: undefined,
+        };
+    }
 
     function errorFn(error, file) {
         console.log("ERROR:", error, file);
@@ -108,32 +112,17 @@
                     return;
                 }
             }
+            // If there is no chunking get the result from this function and concat to the result already present (in case of multiple files)
             result = result.concat(results.data);
+            // Else if there is chunking the result is formed in that function
         }
         filesHandled++;
-        if (filesHandled >= fileList.length) {
+        if (filesHandled >= fileAmount) {
+            // temp
             console.log("Result: ", result);
             console.log("Chunks:", chunks);
-            var x = 0;
             // Send the entire array to a python file on the server who handles the data analysis and recieve the data back from that same file.
-            $.ajax({
-                data: JSON.stringify(result),
-                type: 'POST',
-                url: 'http://127.0.0.1:5000/process',
-                contentType: "application/json; charset=utf-8",
-                beforeSend: function () {
-                    var d = new Date();
-                    x = d.getTime();
-                },
-                success: function (data) {
-                    console.log(data);
-                    var d = new Date();
-                    console.log("Time spend by sending to python and getting data back: ", d.getTime() - x, " ms");
-                },
-                error: function () {
-                    alert("ging fout");
-                }
-            });
+            ajaxArrayToPython(result);
             // location.reload();
         }
     }
@@ -151,34 +140,61 @@
                 return;
             }
         }
+        // Temp
         chunks++;
-        rows += results.data.length;
 
-        parser = streamer;
-
+        // Concatenate each parsed chunk to the result array
         result = result.concat(results.data);
     }
 
-    function buildConfig() {
-        return {
-            download: false,
-            delimiter: "",
-            newline: "",
-            header: false,
-            dynamicTyping: false,
-            preview: 0,
-            step: undefined,
-            encoding: "",
-            worker: false,
-            comments: false,
-            complete: completeFn,
-            error: errorFn,
-            download: false,
-            fastMode: false,
-            skipEmptyLines: true,
-            chunk: chunking ? chunkFn : undefined,
-            beforeFirstChunk: undefined,
-        };
 
+    // Sets chunking to true or false based on the file sizes and determines the chunksize
+    function setChunking() {
+        // Big files should get chunked for the browser not to crash because of memory overflow
+        if (totalFileSize >= 1000000 && totalFileSize < 100000000) {
+            Papa.LocalChunkSize = totalFileSize / 10 + 1;
+            chunking = true;
+            return true;
+        }
+        // TODO: in chunks naar python
+        else if (totalFileSize >= 100000000 && totalFileSize < 1000000000) {
+            Papa.LocalChunkSize = totalFileSize / 1000 + 1;
+            alert("Te grote file");
+            return false;
+        }
+        else if (totalFileSize >= 1000000000 && totalFileSize < 10000000000) {
+            Papa.LocalChunkSize = totalFileSize / 10000 + 1;
+            alert("Te grote file");
+            return false;
+        }
+        else if (totalFileSize >= 10000000000) {
+            alert("Te grote file");
+            return false;
+        }
+        return false;
     }
 });
+
+// Sends the data in an array to a external python script
+function ajaxArrayToPython(array) {
+    // temp
+    var x = 0;
+    $.ajax({     
+        data: JSON.stringify(array),
+        type: 'POST',
+        url: 'http://127.0.0.1:5000/process',
+        contentType: "application/json; charset=utf-8",
+        beforeSend: function () {
+            var d = new Date();
+            x = d.getTime();
+        },
+        success: function (data) {
+            console.log(data);
+            var d = new Date();
+            console.log("Time spend by sending to python and getting data back: ", d.getTime() - x, " ms");
+        },
+        error: function () {
+            alert("Sending data to python went wrong (check python script for errors)");
+        }
+    });
+}
